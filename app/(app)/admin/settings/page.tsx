@@ -68,7 +68,7 @@ export default async function SystemSettingsPage() {
               <StatusRow
                 label="AI assistant"
                 ok={envStatus.aiConfigured}
-                detail={envStatus.aiConfigured ? "An Anthropic API key is set." : "Set ANTHROPIC_API_KEY to enable the assistant."}
+                detail={envStatus.aiConfigured ? "An AI provider key is set (Gemini or Anthropic)." : "Set GEMINI_API_KEY or ANTHROPIC_API_KEY to enable the assistant."}
               />
               <StatusRow
                 label="File storage"

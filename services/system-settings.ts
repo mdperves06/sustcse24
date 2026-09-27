@@ -42,7 +42,7 @@ export function getEnvironmentStatus(actor: Viewer) {
   assertCan(actor, "settings.manage");
   return {
     mailConfigured: isMailConfigured(),
-    aiConfigured: Boolean(env.ANTHROPIC_API_KEY),
+    aiConfigured: Boolean(env.GEMINI_API_KEY || env.ANTHROPIC_API_KEY),
     storageDriver: env.STORAGE_DRIVER,
     s3Configured: env.STORAGE_DRIVER === "s3" ? Boolean(env.S3_BUCKET && env.S3_ACCESS_KEY_ID && env.S3_SECRET_ACCESS_KEY) : null,
     nodeEnv: env.NODE_ENV,

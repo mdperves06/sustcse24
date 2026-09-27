@@ -100,7 +100,9 @@ Copy `.env.example` to `.env` and fill in values. Summary:
 | `STORAGE_LOCAL_DIR` | – | Directory for local uploads (default `./storage`) |
 | `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` | if `s3` | Private S3-compatible bucket |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | for email | Password-reset email delivery |
-| `ANTHROPIC_API_KEY` | – | Enables the AI assistant |
+| `GEMINI_API_KEY` | – | Enables the AI assistant with Google Gemini (preferred when set) |
+| `GEMINI_MODEL` | – | Gemini model (default `gemini-flash-latest`) |
+| `ANTHROPIC_API_KEY` | – | Enables the AI assistant with Claude |
 | `AI_MODEL` | – | Claude model id (default `claude-opus-5`) |
 
 ## Local setup

@@ -30,6 +30,8 @@ const schema = z.object({
 
   ANTHROPIC_API_KEY: z.string().optional(),
   AI_MODEL: z.string().default("claude-opus-5"),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default("gemini-flash-latest"),
 });
 
 const parsed = schema.safeParse(process.env);

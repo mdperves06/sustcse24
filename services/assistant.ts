@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI, type Content, type Part } from "@google/genai";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
@@ -31,8 +32,15 @@ export const chatInputSchema = z.object({
 });
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 
+/** Gemini is used when GEMINI_API_KEY is set; otherwise Claude (ANTHROPIC_API_KEY). */
+export function assistantProvider(): "gemini" | "anthropic" | null {
+  if (env.GEMINI_API_KEY) return "gemini";
+  if (env.ANTHROPIC_API_KEY) return "anthropic";
+  return null;
+}
+
 export function isAssistantConfigured() {
-  return Boolean(env.ANTHROPIC_API_KEY);
+  return assistantProvider() !== null;
 }
 
 const MAX_TOOL_ROUNDS = 6;
@@ -235,23 +243,64 @@ function systemPrompt(viewer: Viewer & { fullName: string }) {
   ].join("\n");
 }
 
-let client: Anthropic | null = null;
+let anthropic: Anthropic | null = null;
+let gemini: GoogleGenAI | null = null;
+
+async function runToolSafely(viewer: Viewer, name: string, input: unknown): Promise<{ ok: boolean; content: string }> {
+  try {
+    return { ok: true, content: await runTool(viewer, name, input) };
+  } catch (error) {
+    console.error("[assistant] tool failed", name, error);
+    return { ok: false, content: "The tool failed or the input was invalid." };
+  }
+}
 
 /** Runs one assistant turn with tool use. Returns the final text. */
 export async function askAssistant(viewer: Viewer & { fullName: string }, input: unknown): Promise<string> {
-  if (!isAssistantConfigured()) throw new AppError("The AI assistant isn't configured on this server yet.", 503);
+  const provider = assistantProvider();
+  if (!provider) throw new AppError("The AI assistant isn't configured on this server yet.", 503);
   if (!(await getSetting("aiAssistantEnabled"))) throw new AppError("The AI assistant has been turned off by an admin.", 503);
   const { messages: history } = chatInputSchema.parse(input);
   if (history.at(-1)?.role !== "user") throw new AppError("The last message must be from you.", 400);
   await enforceRateLimit(`assistant:${viewer.id}`, 20, 10 * 60, "You've sent a lot of questions — please wait a few minutes.");
+  return provider === "gemini" ? askGemini(viewer, history) : askClaude(viewer, history);
+}
 
-  client ??= new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+async function askGemini(viewer: Viewer & { fullName: string }, history: ChatMessage[]): Promise<string> {
+  gemini ??= new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+  const contents: Content[] = history.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] }));
+  const functionDeclarations = TOOLS.map((t) => ({ name: t.name, description: t.description, parametersJsonSchema: t.input_schema }));
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const response = await gemini.models.generateContent({
+      model: env.GEMINI_MODEL,
+      contents,
+      config: { systemInstruction: systemPrompt(viewer), tools: [{ functionDeclarations }] },
+    });
+    const calls = response.functionCalls ?? [];
+    if (calls.length === 0) return response.text?.trim() || "I couldn't find an answer to that.";
+
+    const modelContent = response.candidates?.[0]?.content;
+    if (modelContent) contents.push(modelContent);
+    const parts: Part[] = await Promise.all(
+      calls.map(async (call) => {
+        const result = await runToolSafely(viewer, call.name ?? "", call.args ?? {});
+        return { functionResponse: { id: call.id, name: call.name, response: result.ok ? { result: result.content } : { error: result.content } } };
+      }),
+    );
+    contents.push({ role: "user", parts });
+  }
+  return "That took too many steps — try asking a more specific question.";
+}
+
+async function askClaude(viewer: Viewer & { fullName: string }, history: ChatMessage[]): Promise<string> {
+  anthropic ??= new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const messages: Anthropic.Beta.BetaMessageParam[] = history.map((m) => ({ role: m.role, content: m.content }));
   // Server-side refusal fallbacks are supported on the Opus 5 / Fable 5.1 family.
   const useFallbacks = /^claude-(opus-5|fable-5)/.test(env.AI_MODEL);
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const response = await client.beta.messages.create({
+    const response = await anthropic.beta.messages.create({
       model: env.AI_MODEL,
       max_tokens: 16000,
       system: systemPrompt(viewer),
@@ -281,12 +330,8 @@ export async function askAssistant(viewer: Viewer & { fullName: string }, input:
     messages.push({ role: "assistant", content: response.content });
     const results: Anthropic.Beta.BetaToolResultBlockParam[] = await Promise.all(
       toolUses.map(async (tool) => {
-        try {
-          return { type: "tool_result" as const, tool_use_id: tool.id, content: await runTool(viewer, tool.name, tool.input) };
-        } catch (error) {
-          console.error("[assistant] tool failed", tool.name, error);
-          return { type: "tool_result" as const, tool_use_id: tool.id, content: "The tool failed or the input was invalid.", is_error: true };
-        }
+        const result = await runToolSafely(viewer, tool.name, tool.input);
+        return { type: "tool_result" as const, tool_use_id: tool.id, content: result.content, ...(result.ok ? {} : { is_error: true }) };
       }),
     );
     messages.push({ role: "user", content: results });

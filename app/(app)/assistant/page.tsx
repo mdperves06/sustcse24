@@ -29,7 +29,7 @@ export default async function AssistantPage() {
         <EmptyState
           icon={Bot}
           title="Assistant not configured"
-          description="An administrator needs to set ANTHROPIC_API_KEY on the server to enable the AI assistant."
+          description="An administrator needs to set GEMINI_API_KEY (or ANTHROPIC_API_KEY) on the server to enable the AI assistant."
         />
       ) : !enabled ? (
         <EmptyState icon={Bot} title="Assistant turned off" description="An admin has disabled the AI assistant for now." />
