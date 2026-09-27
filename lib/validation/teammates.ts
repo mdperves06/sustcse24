@@ -23,13 +23,13 @@ export type TeammateRequestInput = z.infer<typeof teammateRequestSchema>;
 
 /** "ai, React" → ["ai", "react"] */
 const skillsParam = z
-  .string()
-  .max(300)
+  .union([z.string().max(300), z.array(z.string().max(40)).max(8)])
   .optional()
   .catch(undefined)
-  .transform((v) =>
-    [...new Set((v ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean))].slice(0, 8),
-  );
+  .transform((v) => {
+    const raw = Array.isArray(v) ? v : (v ?? "").split(",");
+    return [...new Set(raw.map((s) => s.trim().toLowerCase()).filter(Boolean))].slice(0, 8);
+  });
 
 export const teammateFiltersSchema = z.object({
   q: z.string().trim().max(100).optional().catch(undefined),

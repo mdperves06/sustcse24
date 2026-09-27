@@ -44,12 +44,12 @@ export const opportunitySchema = z.object({
 
 export type OpportunityInput = z.infer<typeof opportunitySchema>;
 
-/** Query-string boolean: "1" / "true" / "on". */
+/** Query-string boolean: "1" / "true" / "on" (also accepts an already-parsed boolean). */
 export const queryFlag = z
-  .union([z.literal("1"), z.literal("true"), z.literal("on")])
+  .union([z.boolean(), z.literal("1"), z.literal("true"), z.literal("on")])
   .optional()
   .catch(undefined)
-  .transform((v) => Boolean(v));
+  .transform((v) => v === true || v === "1" || v === "true" || v === "on");
 
 export const opportunityFiltersSchema = z.object({
   q: z.string().trim().max(100).optional().catch(undefined),

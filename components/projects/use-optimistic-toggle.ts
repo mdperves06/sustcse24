@@ -11,28 +11,33 @@ import type { ActionResult } from "@/types/action";
 export function useOptimisticToggle<T>(
   initial: boolean,
   action: (next: boolean) => Promise<ActionResult<T>>,
-  onResult?: (data: T | undefined) => void,
+  opts: { onChange?: (next: boolean) => void; onSuccess?: (data: T | undefined) => void; onRevert?: (value: boolean) => void } = {},
 ) {
   const [on, setOn] = useState(initial);
   const [pending, startTransition] = useTransition();
 
+  function revert(value: boolean, message: string) {
+    setOn(value);
+    opts.onRevert?.(value);
+    toast.error(message);
+  }
+
   function toggle() {
     const next = !on;
     setOn(next);
+    opts.onChange?.(next);
     startTransition(async () => {
       try {
         const result = await action(next);
-        if (result.ok) onResult?.(result.data);
-        else {
-          setOn(!next);
-          toast.error(result.error);
-        }
+        if (result.ok) {
+          if (result.message) toast.success(result.message);
+          opts.onSuccess?.(result.data);
+        } else revert(!next, result.error);
       } catch {
-        setOn(!next);
-        toast.error("Network error — check your connection and try again.");
+        revert(!next, "Network error — check your connection and try again.");
       }
     });
   }
 
-  return { on, setOn, pending, toggle };
+  return { on, pending, toggle };
 }

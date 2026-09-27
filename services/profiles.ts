@@ -8,13 +8,6 @@ import { skillSlug } from "@/lib/skills";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import type { BloodGroup, EmploymentStatus, Role, SkillCategory } from "@/lib/generated/prisma/enums";
 
-const SKILL_FIELDS = {
-  programmingLanguages: "LANGUAGE",
-  frameworks: "FRAMEWORK",
-  tools: "TOOL",
-  otherSkills: "OTHER",
-} as const satisfies Record<string, SkillCategory>;
-
 export type ProfileLink = { label: string; url: string };
 
 /** Everything another batch member may see — hidden fields are `null`, never present. */

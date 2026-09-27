@@ -1,7 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { storage } from "@/lib/storage";
-import { ValidationError } from "@/lib/errors";
+import { storage, uploadsAvailable } from "@/lib/storage";
+import { AppError, ValidationError } from "@/lib/errors";
 
 type Detected = { mime: string; ext: string };
 
@@ -77,6 +77,9 @@ export function sanitizeFileName(name: string): string {
 
 /** Validates size + real type, then stores the file under a random key. */
 export async function saveUpload(file: File, kind: UploadKind, field = "file"): Promise<SavedUpload> {
+  if (!uploadsAvailable()) {
+    throw new AppError("File uploads aren't configured on this server yet. Ask an admin to set up file storage.", 503);
+  }
   const rule = UPLOAD_RULES[kind];
   if (file.size > rule.maxBytes) {
     throw new ValidationError(`File is too large (${rule.label}).`, { [field]: [`Maximum size: ${rule.label}.`] });

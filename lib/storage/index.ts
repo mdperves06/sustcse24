@@ -28,3 +28,11 @@ export function storage(): StorageDriver {
   return driver;
 }
 
+/**
+ * Serverless hosts (e.g. Vercel) have no persistent disk, so the local driver can't
+ * accept uploads there. Set STORAGE_DRIVER=s3 in that case.
+ */
+export function uploadsAvailable(): boolean {
+  return env.STORAGE_DRIVER === "s3" || !process.env.VERCEL;
+}
+

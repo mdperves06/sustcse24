@@ -34,6 +34,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ key:
     const resource = await db.resource.findFirst({ where: { fileKey: key, deletedAt: null }, select: { fileName: true } });
     if (!resource) return NextResponse.json({ error: "Not found." }, { status: 404 });
     downloadName = resource.fileName;
+  } else if (key.startsWith("screenshot/")) {
+    const image = await db.projectImage.findFirst({ where: { fileKey: key, project: { deletedAt: null } }, select: { id: true } });
+    if (!image) return NextResponse.json({ error: "Not found." }, { status: 404 });
   } else if (key.startsWith("attachment/")) {
     const a = await db.announcement.findFirst({ where: { attachmentKey: key, deletedAt: null }, select: { attachmentName: true } });
     if (!a) return NextResponse.json({ error: "Not found." }, { status: 404 });
