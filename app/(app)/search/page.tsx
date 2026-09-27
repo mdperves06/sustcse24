@@ -29,6 +29,30 @@ import {
 } from "@/lib/labels";
 import { formatDate, formatRelative } from "@/lib/time";
 import { cn } from "@/lib/utils";
+import { NAV_SECTIONS } from "@/lib/nav";
+import { can } from "@/lib/auth/permissions";
+
+/** Extra words people might search for to find a page. */
+const PAGE_KEYWORDS: Record<string, string> = {
+  "/assistant": "ai assistant chatbot gemini ask help bot",
+  "/id-card": "digital id card qr batch id",
+  "/directory": "students members batchmates people",
+  "/feed": "posts community discussion",
+  "/teammates": "team partner hackathon teammate",
+  "/achievements": "hall of fame awards achievements verified",
+  "/careers": "career jobs company network",
+  "/skills": "skill map statistics stats",
+  "/resources": "notes slides questions lab academic",
+  "/settings": "password sessions privacy settings",
+  "/admin": "admin panel import students moderation",
+};
+
+function matchPages(q: string, role: Parameters<typeof can>[0]) {
+  const needle = q.toLowerCase();
+  return NAV_SECTIONS.flatMap((s) => s.items)
+    .filter((i) => !i.permission || can(role, i.permission))
+    .filter((i) => `${i.label} ${PAGE_KEYWORDS[i.href] ?? ""}`.toLowerCase().includes(needle));
+}
 
 export const metadata: Metadata = { title: "Search" };
 
@@ -91,9 +115,11 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
   const sp = await searchParams;
   const { q, type } = searchQuerySchema.parse(sp);
   const results = q ? await globalSearch(viewer, q, type) : null;
+  const pages = q && q.trim().length >= 2 && type === "all" ? matchPages(q.trim(), viewer.role) : [];
   const more = (t: string) => (type === "all" ? `/search?q=${encodeURIComponent(q ?? "")}&type=${t}` : undefined);
   const total = results
-    ? results.students.length + results.posts.length + results.projects.length + results.opportunities.length + results.resources.length + results.events.length + results.announcements.length
+    ? pages.length +
+      results.students.length + results.posts.length + results.projects.length + results.opportunities.length + results.resources.length + results.events.length + results.announcements.length
     : 0;
 
   return (
@@ -136,6 +162,17 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
         <EmptyState icon={Search} title={`No results for “${results.q}”`} description="Check the spelling or try a broader term." />
       ) : (
         <div className="space-y-8">
+          <Section title="Pages" icon={Search} count={pages.length}>
+            <ul className="flex flex-wrap gap-2">
+              {pages.map((p) => (
+                <li key={p.href}>
+                  <Link href={p.href} className={cn(buttonVariants({ variant: "outline" }), "gap-2")}>
+                    <p.icon aria-hidden /> {p.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Section>
           <Section title="Students" icon={Users} count={results.studentTotal} moreHref={`/directory?q=${encodeURIComponent(results.q)}`}>
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {results.students.map((s) => (

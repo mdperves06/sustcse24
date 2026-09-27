@@ -14,7 +14,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { UserAvatar } from "@/components/shared/user-avatar";
@@ -46,9 +45,10 @@ export function AppShell({ user, unread, children }: { user: ShellUser; unread: 
         <div className="flex h-16 items-center px-5">
           <Logo href="/dashboard" />
         </div>
-        <ScrollArea className="flex-1 px-3 pb-6">
+        {/* min-h-0 lets the nav scroll inside the fixed-height sidebar on short screens. */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-6">
           <SidebarNav role={user.role} />
-        </ScrollArea>
+        </div>
       </aside>
 
       {/* Mobile / tablet navigation drawer */}
@@ -61,9 +61,9 @@ export function AppShell({ user, unread, children }: { user: ShellUser; unread: 
               </div>
             </SheetTitle>
           </SheetHeader>
-          <ScrollArea className="h-[calc(100dvh-4rem)] px-3 py-4">
+          <div className="h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain px-3 py-4">
             <SidebarNav role={user.role} onNavigate={() => setMenuOpen(false)} />
-          </ScrollArea>
+          </div>
         </SheetContent>
       </Sheet>
 
