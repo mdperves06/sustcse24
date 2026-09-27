@@ -1,0 +1,932 @@
+// CSE 24 — Batch Digital Community
+// PostgreSQL schema. Table names are snake_case via @@map; Prisma models are PascalCase.
+// Soft deletion is implemented with nullable `deletedAt` columns on user-generated content.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum Role {
+  STUDENT
+  MODERATOR
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum Visibility {
+  BATCH
+  PRIVATE
+}
+
+enum BloodGroup {
+  A_POS
+  A_NEG
+  B_POS
+  B_NEG
+  AB_POS
+  AB_NEG
+  O_POS
+  O_NEG
+}
+
+enum EmploymentStatus {
+  STUDENT
+  EMPLOYED
+  INTERN
+  FREELANCER
+  SEEKING
+  HIGHER_STUDIES
+  ENTREPRENEUR
+  OTHER
+}
+
+enum SkillCategory {
+  LANGUAGE
+  FRAMEWORK
+  TOOL
+  OTHER
+}
+
+enum AnnouncementCategory {
+  ACADEMIC
+  EVENT
+  IMPORTANT
+  GENERAL
+  EMERGENCY
+  CAREER
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum EventType {
+  MEETUP
+  TOUR
+  SPORTS
+  REUNION
+  IFTAR
+  HACKATHON
+  WORKSHOP
+  SEMINAR
+  ACADEMIC
+  OTHER
+}
+
+enum RsvpStatus {
+  GOING
+  MAYBE
+  NOT_GOING
+}
+
+enum PostType {
+  GENERAL
+  QUESTION
+  DISCUSSION
+  ACHIEVEMENT
+  OPPORTUNITY
+  PROJECT
+  ANNOUNCEMENT
+}
+
+enum ReactionType {
+  LIKE
+  LOVE
+  CELEBRATE
+  INSIGHTFUL
+  FUNNY
+}
+
+enum ReportTarget {
+  POST
+  COMMENT
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
+}
+
+enum ResourceCategory {
+  COURSE
+  NOTES
+  SLIDES
+  PREVIOUS_QUESTIONS
+  LAB
+  ASSIGNMENT
+  TUTORIAL
+  LINK
+}
+
+enum OpportunityType {
+  INTERNSHIP
+  JOB
+  HACKATHON
+  SCHOLARSHIP
+  COMPETITION
+  RESEARCH
+  FREELANCING
+}
+
+enum AchievementCategory {
+  HACKATHON
+  MUN
+  RESEARCH
+  SCHOLARSHIP
+  CERTIFICATION
+  COMPETITION
+  JOB
+  STARTUP
+  OTHER
+}
+
+enum AchievementStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum ProjectCategory {
+  WEB
+  MOBILE
+  AI_ML
+  CYBER_SECURITY
+  IOT
+  ROBOTICS
+  DATA_SCIENCE
+  OTHER
+}
+
+enum GroupRole {
+  MEMBER
+  MANAGER
+}
+
+enum CalendarEventType {
+  EXAM
+  ASSIGNMENT
+  DEADLINE
+  BATCH_EVENT
+  COMPETITION
+  WORKSHOP
+  OTHER
+}
+
+enum ContactPreference {
+  IN_APP
+  EMAIL
+  PHONE
+  FACEBOOK
+  LINKEDIN
+}
+
+enum TeammateRequestStatus {
+  OPEN
+  CLOSED
+}
+
+enum NotificationType {
+  ANNOUNCEMENT
+  EVENT_REMINDER
+  COMMENT
+  REACTION
+  POLL
+  OPPORTUNITY_DEADLINE
+  ACHIEVEMENT_VERIFICATION
+  PROJECT_INTERACTION
+  BIRTHDAY
+  SYSTEM
+}
+
+// ───────────────────────────── Accounts ─────────────────────────────
+
+model User {
+  id                     String        @id @default(cuid())
+  roll                   String        @unique
+  email                  String?       @unique
+  passwordHash           String
+  mustChangePassword     Boolean       @default(true)
+  role                   Role          @default(STUDENT)
+  status                 AccountStatus @default(ACTIVE)
+  failedLoginAttempts    Int           @default(0)
+  lockedUntil            DateTime?
+  postingRestrictedUntil DateTime?
+  restrictionReason      String?
+  lastLoginAt            DateTime?
+  lastActiveAt           DateTime?
+  passwordChangedAt      DateTime?
+  /// Marks seed/demo accounts so they can never be confused with real students.
+  isDemo                 Boolean       @default(false)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  deletedAt              DateTime?
+
+  profile              StudentProfile?
+  privacy              PrivacySettings?
+  sessions             Session[]
+  passwordResetTokens  PasswordResetToken[]
+  skills               ProfileSkill[]
+  announcements        Announcement[]
+  eventsCreated        Event[]               @relation("EventCreator")
+  eventRsvps           EventAttendee[]
+  posts                Post[]
+  comments             Comment[]
+  reactions            Reaction[]
+  pollsCreated         Poll[]
+  pollBallots          PollBallot[]
+  resources            Resource[]
+  opportunities        Opportunity[]
+  opportunityBookmarks OpportunityBookmark[]
+  achievements         Achievement[]         @relation("AchievementOwner")
+  achievementsVerified Achievement[]         @relation("AchievementVerifier")
+  projects             Project[]             @relation("ProjectAuthor")
+  projectMemberships   ProjectMember[]
+  projectLikes         ProjectLike[]
+  projectBookmarks     ProjectBookmark[]
+  groupsCreated        Group[]
+  groupMemberships     GroupMember[]
+  notifications        Notification[]        @relation("NotificationRecipient")
+  notificationsSent    Notification[]        @relation("NotificationActor")
+  reportsFiled         Report[]              @relation("ReportReporter")
+  reportsReviewed      Report[]              @relation("ReportReviewer")
+  wishesSent           BirthdayWish[]        @relation("WishSender")
+  wishesReceived       BirthdayWish[]        @relation("WishRecipient")
+  calendarEvents       CalendarEvent[]
+  teammateRequests     TeammateRequest[]
+  auditLogs            AuditLog[]
+
+  @@index([role])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model StudentProfile {
+  userId              String           @id
+  fullName            String
+  studentId           String?          @unique
+  nickname            String?
+  phone               String?
+  bloodGroup          BloodGroup?
+  location            String?
+  bio                 String?
+  dateOfBirth         DateTime?        @db.Date
+  department          String           @default("Computer Science & Engineering")
+  batch               String           @default("CSE 24")
+  avatarKey           String?
+  cvKey               String?
+  cvFileName          String?
+  interests           String[]         @default([])
+  academicInterests   String[]         @default([])
+  facebookUrl         String?
+  linkedinUrl         String?
+  githubUrl           String?
+  portfolioUrl        String?
+  otherLinks          Json             @default("[]")
+  currentOrganization String?
+  position            String?
+  industry            String?
+  employmentStatus    EmploymentStatus @default(STUDENT)
+  careerInterests     String[]         @default([])
+  hobbies             String[]         @default([])
+  certifications      String[]         @default([])
+  isVerified          Boolean          @default(false)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([fullName])
+  @@index([location])
+  @@index([currentOrganization])
+  @@index([industry])
+  @@index([employmentStatus])
+  @@map("student_profiles")
+}
+
+/// Per-field visibility controls. Everything is batch-only at most — nothing is ever public.
+model PrivacySettings {
+  userId               String     @id
+  emailVisibility      Visibility @default(BATCH)
+  phoneVisibility      Visibility @default(PRIVATE)
+  facebookVisibility   Visibility @default(BATCH)
+  linkedinVisibility   Visibility @default(BATCH)
+  githubVisibility     Visibility @default(BATCH)
+  locationVisibility   Visibility @default(BATCH)
+  birthdayVisibility   Visibility @default(BATCH)
+  bloodGroupVisibility Visibility @default(BATCH)
+  careerVisibility     Visibility @default(BATCH)
+  cvVisibility         Visibility @default(PRIVATE)
+  updatedAt            DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("privacy_settings")
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  /// SHA-256 of the opaque session token. The raw token only ever lives in the user's cookie.
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  rememberMe Boolean  @default(false)
+  userAgent  String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+/// Fixed-window rate limiting shared across all app instances.
+model RateLimit {
+  key     String   @id
+  count   Int
+  resetAt DateTime
+
+  @@index([resetAt])
+  @@map("rate_limits")
+}
+
+// ───────────────────────────── Skills ─────────────────────────────
+
+model Skill {
+  id       String        @id @default(cuid())
+  name     String
+  slug     String        @unique
+  category SkillCategory
+
+  profiles ProfileSkill[]
+
+  @@index([category])
+  @@map("skills")
+}
+
+model ProfileSkill {
+  userId  String
+  skillId String
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([userId, skillId])
+  @@index([skillId])
+  @@map("profile_skills")
+}
+
+// ───────────────────────────── Announcements ─────────────────────────────
+
+model Announcement {
+  id             String               @id @default(cuid())
+  title          String
+  body           String
+  category       AnnouncementCategory @default(GENERAL)
+  priority       Priority             @default(NORMAL)
+  authorId       String
+  pinned         Boolean              @default(false)
+  archived       Boolean              @default(false)
+  attachmentKey  String?
+  attachmentName String?
+  expiresAt      DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  deletedAt      DateTime?
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([pinned, createdAt])
+  @@index([category])
+  @@index([archived, deletedAt])
+  @@map("announcements")
+}
+
+// ───────────────────────────── Events ─────────────────────────────
+
+model Event {
+  id                   String    @id @default(cuid())
+  title                String
+  description          String
+  type                 EventType @default(MEETUP)
+  startsAt             DateTime
+  endsAt               DateTime?
+  location             String
+  organizer            String
+  coverKey             String?
+  registrationDeadline DateTime?
+  createdById          String
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+
+  createdBy User            @relation("EventCreator", fields: [createdById], references: [id])
+  attendees EventAttendee[]
+
+  @@index([startsAt])
+  @@index([deletedAt])
+  @@map("events")
+}
+
+model EventAttendee {
+  eventId   String
+  userId    String
+  status    RsvpStatus
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+  @@index([userId])
+  @@map("event_attendees")
+}
+
+// ───────────────────────────── Community feed ─────────────────────────────
+
+model Post {
+  id            String    @id @default(cuid())
+  authorId      String
+  groupId       String?
+  type          PostType  @default(GENERAL)
+  content       String
+  linkUrl       String?
+  imageKeys     String[]  @default([])
+  editedAt      DateTime?
+  /// Set when a moderator removes the post. Removed posts are hidden from everyone but staff.
+  removedAt     DateTime?
+  removedById   String?
+  removedReason String?
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+
+  author    User       @relation(fields: [authorId], references: [id])
+  group     Group?     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  reactions Reaction[]
+  reports   Report[]
+
+  @@index([createdAt])
+  @@index([authorId])
+  @@index([groupId, createdAt])
+  @@index([type])
+  @@map("posts")
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  postId    String
+  authorId  String
+  content   String
+  removedAt DateTime?
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  post    Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author  User     @relation(fields: [authorId], references: [id])
+  reports Report[]
+
+  @@index([postId, createdAt])
+  @@map("comments")
+}
+
+model Reaction {
+  postId    String
+  userId    String
+  type      ReactionType @default(LIKE)
+  createdAt DateTime     @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([userId])
+  @@map("reactions")
+}
+
+model Report {
+  id             String       @id @default(cuid())
+  reporterId     String
+  targetType     ReportTarget
+  postId         String?
+  commentId      String?
+  reason         String
+  details        String?
+  status         ReportStatus @default(PENDING)
+  reviewedById   String?
+  reviewedAt     DateTime?
+  resolutionNote String?
+  createdAt      DateTime     @default(now())
+
+  reporter   User     @relation("ReportReporter", fields: [reporterId], references: [id])
+  reviewedBy User?    @relation("ReportReviewer", fields: [reviewedById], references: [id])
+  post       Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment    Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([reporterId, postId])
+  @@unique([reporterId, commentId])
+  @@index([status, createdAt])
+  @@map("reports")
+}
+
+// ───────────────────────────── Polls ─────────────────────────────
+
+model Poll {
+  id             String    @id @default(cuid())
+  question       String
+  description    String?
+  multipleChoice Boolean   @default(false)
+  anonymous      Boolean   @default(false)
+  startsAt       DateTime  @default(now())
+  endsAt         DateTime?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  deletedAt      DateTime?
+
+  createdBy User         @relation(fields: [createdById], references: [id])
+  options   PollOption[]
+  ballots   PollBallot[]
+
+  @@index([startsAt])
+  @@map("polls")
+}
+
+model PollOption {
+  id       String @id @default(cuid())
+  pollId   String
+  label    String
+  position Int
+
+  poll  Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes PollVote[]
+
+  @@index([pollId])
+  @@map("poll_options")
+}
+
+/// One ballot per user per poll — the unique constraint makes duplicate voting impossible,
+/// even under concurrent requests. Individual choices live in PollVote.
+model PollBallot {
+  id        String   @id @default(cuid())
+  pollId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  poll  Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  votes PollVote[]
+
+  @@unique([pollId, userId])
+  @@map("poll_ballots")
+}
+
+model PollVote {
+  ballotId String
+  optionId String
+
+  ballot PollBallot @relation(fields: [ballotId], references: [id], onDelete: Cascade)
+  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@id([ballotId, optionId])
+  @@index([optionId])
+  @@map("poll_votes")
+}
+
+// ───────────────────────────── Academic resources ─────────────────────────────
+
+model Resource {
+  id           String           @id @default(cuid())
+  title        String
+  description  String?
+  course       String
+  category     ResourceCategory
+  uploadedById String
+  fileKey      String?
+  fileName     String?
+  fileSize     Int?
+  mimeType     String?
+  url          String?
+  downloads    Int              @default(0)
+  createdAt    DateTime         @default(now())
+  deletedAt    DateTime?
+
+  uploadedBy User @relation(fields: [uploadedById], references: [id])
+
+  @@index([course])
+  @@index([category])
+  @@index([createdAt])
+  @@map("resources")
+}
+
+// ───────────────────────────── Opportunities ─────────────────────────────
+
+model Opportunity {
+  id           String          @id @default(cuid())
+  title        String
+  organization String
+  description  String
+  type         OpportunityType
+  location     String?
+  deadline     DateTime?
+  applyUrl     String?
+  postedById   String
+  createdAt    DateTime        @default(now())
+  deletedAt    DateTime?
+
+  postedBy  User                  @relation(fields: [postedById], references: [id])
+  bookmarks OpportunityBookmark[]
+
+  @@index([deadline])
+  @@index([type])
+  @@map("opportunities")
+}
+
+model OpportunityBookmark {
+  userId        String
+  opportunityId String
+  createdAt     DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@id([userId, opportunityId])
+  @@map("opportunity_bookmarks")
+}
+
+// ───────────────────────────── Achievements ─────────────────────────────
+
+model Achievement {
+  id              String              @id @default(cuid())
+  userId          String
+  title           String
+  description     String?
+  category        AchievementCategory
+  achievedOn      DateTime?           @db.Date
+  link            String?
+  status          AchievementStatus   @default(PENDING)
+  verifiedById    String?
+  verifiedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime            @default(now())
+  deletedAt       DateTime?
+
+  user       User  @relation("AchievementOwner", fields: [userId], references: [id])
+  verifiedBy User? @relation("AchievementVerifier", fields: [verifiedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([userId])
+  @@map("achievements")
+}
+
+// ───────────────────────────── Projects ─────────────────────────────
+
+model Project {
+  id           String          @id @default(cuid())
+  title        String
+  description  String
+  technologies String[]        @default([])
+  githubUrl    String?
+  demoUrl      String?
+  category     ProjectCategory @default(OTHER)
+  authorId     String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  deletedAt    DateTime?
+
+  author    User              @relation("ProjectAuthor", fields: [authorId], references: [id])
+  images    ProjectImage[]
+  members   ProjectMember[]
+  likes     ProjectLike[]
+  bookmarks ProjectBookmark[]
+
+  @@index([category])
+  @@index([createdAt])
+  @@map("projects")
+}
+
+model ProjectImage {
+  id        String @id @default(cuid())
+  projectId String
+  fileKey   String
+  position  Int    @default(0)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_images")
+}
+
+model ProjectMember {
+  projectId String
+  userId    String
+  role      String?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+model ProjectLike {
+  projectId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_likes")
+}
+
+model ProjectBookmark {
+  projectId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_bookmarks")
+}
+
+// ───────────────────────────── Find a teammate ─────────────────────────────
+
+model TeammateRequest {
+  id                String                @id @default(cuid())
+  authorId          String
+  title             String
+  description       String
+  /// Lower-cased skill names for case-insensitive filtering.
+  requiredSkills    String[]              @default([])
+  teammatesNeeded   Int                   @default(1)
+  deadline          DateTime?
+  contactPreference ContactPreference     @default(IN_APP)
+  status            TeammateRequestStatus @default(OPEN)
+  createdAt         DateTime              @default(now())
+  deletedAt         DateTime?
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("teammate_requests")
+}
+
+// ───────────────────────────── Interest groups ─────────────────────────────
+
+model Group {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String
+  icon        String?
+  createdById String
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+
+  createdBy User          @relation(fields: [createdById], references: [id])
+  members   GroupMember[]
+  posts     Post[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  groupId  String
+  userId   String
+  role     GroupRole @default(MEMBER)
+  joinedAt DateTime  @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+// ───────────────────────────── Calendar & birthdays ─────────────────────────────
+
+model CalendarEvent {
+  id          String            @id @default(cuid())
+  title       String
+  description String?
+  type        CalendarEventType
+  course      String?
+  location    String?
+  startsAt    DateTime
+  endsAt      DateTime?
+  allDay      Boolean           @default(false)
+  createdById String
+  createdAt   DateTime          @default(now())
+  deletedAt   DateTime?
+
+  createdBy User @relation(fields: [createdById], references: [id])
+
+  @@index([startsAt])
+  @@map("calendar_events")
+}
+
+/// Birthdays themselves are derived from StudentProfile.dateOfBirth (respecting privacy);
+/// this table stores the wishes people send.
+model BirthdayWish {
+  id         String   @id @default(cuid())
+  fromUserId String
+  toUserId   String
+  year       Int
+  message    String
+  createdAt  DateTime @default(now())
+
+  fromUser User @relation("WishSender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("WishRecipient", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromUserId, toUserId, year])
+  @@index([toUserId, year])
+  @@map("birthday_wishes")
+}
+
+// ───────────────────────────── Notifications ─────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  actorId   String?
+  type      NotificationType
+  title     String
+  body      String?
+  link      String?
+  /// Optional de-duplication key (e.g. "event-reminder:<eventId>") so reminders are sent once.
+  dedupeKey String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user  User  @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}
+
+// ───────────────────────────── Administration ─────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
